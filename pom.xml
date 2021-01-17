@@ -7,6 +7,7 @@
         <module>eureka-s</module>
         <module>serv-user</module>
         <module>gateway</module>
+        <module>proxy-user</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>

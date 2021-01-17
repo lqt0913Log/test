@@ -1,0 +1,12 @@
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:9800/eureka/
+server:
+  port: 9527
+spring:
+  application:
+    name: proxy-user
+feign:
+  hystrix:
+    enabled: true
