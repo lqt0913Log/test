@@ -9,6 +9,7 @@
         <module>gateway</module>
         <module>proxy-user</module>
         <module>serv-auth</module>
+        <module>proxy-algorithm</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>
