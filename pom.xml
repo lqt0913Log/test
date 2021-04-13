@@ -10,6 +10,11 @@
         <module>proxy-user</module>
         <module>serv-auth</module>
         <module>proxy-algorithm</module>
+        <module>poifile</module>
+        <module>common</module>
+        <module>seata</module>
+        <module>springdatajpa</module>
+        <module>zipkin</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>

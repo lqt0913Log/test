@@ -1,161 +1,100 @@
 package com.lqt.security.auth.config;
 
 
-import com.lqt.security.auth.common.AuthConstants;
-//import com.lqt.security.auth.common.Result;
-//import com.lqt.security.auth.common.ResultCode;
-import com.lqt.security.auth.common.Result;
-import com.lqt.security.auth.common.ResultCode;
-import com.lqt.security.auth.domain.User;
-import com.lqt.security.auth.filter.CustomClientCredentialsTokenEndpointFilter;
-import com.lqt.security.auth.service.JdbcClientDetailsServiceImpl;
-import com.lqt.security.auth.service.impl.UserDetailsServiceImpl;
-import lombok.AllArgsConstructor;
-import lombok.SneakyThrows;
 
+import com.alibaba.fastjson.JSON;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.core.io.ClassPathResource;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
+import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.oauth2.common.DefaultOAuth2AccessToken;
+import org.springframework.security.oauth2.common.OAuth2AccessToken;
 import org.springframework.security.oauth2.config.annotation.configurers.ClientDetailsServiceConfigurer;
 import org.springframework.security.oauth2.config.annotation.web.configuration.AuthorizationServerConfigurerAdapter;
 import org.springframework.security.oauth2.config.annotation.web.configuration.EnableAuthorizationServer;
 import org.springframework.security.oauth2.config.annotation.web.configurers.AuthorizationServerEndpointsConfigurer;
 import org.springframework.security.oauth2.config.annotation.web.configurers.AuthorizationServerSecurityConfigurer;
-import org.springframework.security.oauth2.provider.token.TokenEnhancer;
-import org.springframework.security.oauth2.provider.token.TokenEnhancerChain;
+import org.springframework.security.oauth2.provider.OAuth2Authentication;
+import org.springframework.security.oauth2.provider.token.TokenStore;
 import org.springframework.security.oauth2.provider.token.store.JwtAccessTokenConverter;
-import org.springframework.security.oauth2.provider.token.store.KeyStoreKeyFactory;
-import org.springframework.security.web.AuthenticationEntryPoint;
+import org.springframework.security.oauth2.provider.token.store.redis.RedisTokenStore;
 
-import javax.sql.DataSource;
-import java.security.KeyPair;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import static org.bouncycastle.asn1.x500.style.RFC4519Style.cn;
 
 /**
  * 授权服务配置
  */
 @Configuration
 @EnableAuthorizationServer
-@AllArgsConstructor
+
 public class AuthorizationServerConfig extends AuthorizationServerConfigurerAdapter {
+    // 资源ID
+    private static final String SOURCE_ID = "order";
+    private static final int ACCESS_TOKEN_TIMER = 60 * 60 * 24;
+    private static final int REFRESH_TOKEN_TIMER = 60 * 60 * 24 * 30;
 
-    private DataSource dataSource;
-    private AuthenticationManager authenticationManager;
-    private UserDetailsServiceImpl userDetailsService;
 
-    /**
-     * 配置客户端详情(数据库)
-     */
+    @Autowired
+    AuthenticationManager authenticationManager;
+
+    @Autowired
+    RedisConnectionFactory redisConnectionFactory;
+
     @Override
-    @SneakyThrows
     public void configure(ClientDetailsServiceConfigurer clients) throws Exception {
-        JdbcClientDetailsServiceImpl jdbcClientDetailsService = new JdbcClientDetailsServiceImpl(dataSource);
-        jdbcClientDetailsService.setFindClientDetailsSql(AuthConstants.FIND_CLIENT_DETAILS_SQL);
-        jdbcClientDetailsService.setSelectClientDetailsSql(AuthConstants.SELECT_CLIENT_DETAILS_SQL);
-        clients.withClientDetails(jdbcClientDetailsService);
+        clients.inMemory().withClient("myapp").resourceIds(SOURCE_ID).authorizedGrantTypes("password", "refresh_token")
+                .scopes("all").authorities("ADMIN").secret("lxapp").accessTokenValiditySeconds(ACCESS_TOKEN_TIMER)
+                .refreshTokenValiditySeconds(REFRESH_TOKEN_TIMER);
     }
-
-    /**
-     * 配置授权（authorization）以及令牌（token）的访问端点和令牌服务(token services)
-     */
-    @Override
-    public void configure(AuthorizationServerEndpointsConfigurer endpoints) {
-        TokenEnhancerChain tokenEnhancerChain = new TokenEnhancerChain();
-        List<TokenEnhancer> tokenEnhancers = new ArrayList<>();
-        tokenEnhancers.add(tokenEnhancer());
-        tokenEnhancers.add(jwtAccessTokenConverter());
-        tokenEnhancerChain.setTokenEnhancers(tokenEnhancers);
-
-        endpoints
-
-                .authenticationManager(authenticationManager)
-                .accessTokenConverter(jwtAccessTokenConverter())
-                .tokenEnhancer(tokenEnhancerChain)
-                .userDetailsService((UserDetailsService) userDetailsService)
-                // refresh token有两种使用方式：重复使用(true)、非重复使用(false)，默认为true
-                //      1 重复使用：access token过期刷新时， refresh token过期时间未改变，仍以初次生成的时间为准
-                //      2 非重复使用：access token过期刷新时， refresh token过期时间延续，在refresh token有效期内刷新便永不失效达到无需再次登录的目的
-                .reuseRefreshTokens(true);
-    }
-
 
     @Override
-    public void configure(AuthorizationServerSecurityConfigurer security) {
-        /*security.allowFormAuthenticationForClients();*/
-        CustomClientCredentialsTokenEndpointFilter endpointFilter = new CustomClientCredentialsTokenEndpointFilter(security);
-        endpointFilter.afterPropertiesSet();
-        endpointFilter.setAuthenticationEntryPoint(authenticationEntryPoint());
-        security.addTokenEndpointAuthenticationFilter(endpointFilter);
-
-        security.authenticationEntryPoint(authenticationEntryPoint())
-                .tokenKeyAccess("isAuthenticated()")
-                .checkTokenAccess("permitAll()");
+    public void configure(AuthorizationServerEndpointsConfigurer endpoints) throws Exception {
+        endpoints.accessTokenConverter(accessTokenConverter());
+        endpoints.tokenStore(tokenStore()).authenticationManager(authenticationManager);
     }
 
-
-    /**
-     * 自定义认证异常响应数据
-     * @return
-     */
+    @Override
+    public void configure(AuthorizationServerSecurityConfigurer oauthServer) throws Exception {
+        // 允许表单认证
+        oauthServer.allowFormAuthenticationForClients();
+    }
+    // JWT
     @Bean
-    public AuthenticationEntryPoint authenticationEntryPoint() {
-        return (request, response, e) -> {
-            response.setStatus(HttpStatus.OK.value());
-            response.setHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_UTF8_VALUE);
-            response.setHeader("Access-Control-Allow-Origin", "*");
-            response.setHeader("Cache-Control", "no-cache");
-//            Result result = Result.failed(ResultCode.CLIENT_AUTHENTICATION_FAILED);
-//            response.getWriter().print(JSONUtil.toJsonStr(result));
-            response.getWriter().flush();
+    public JwtAccessTokenConverter accessTokenConverter() {
+        JwtAccessTokenConverter accessTokenConverter = new JwtAccessTokenConverter() {
+            /***
+             * 重写增强token方法,用于自定义一些token总需要封装的信息
+             */
+            @Override
+            public OAuth2AccessToken enhance(OAuth2AccessToken accessToken, OAuth2Authentication authentication) {
+                String userName = authentication.getUserAuthentication().getName();
+                // 得到用户名，去处理数据库可以拿到当前用户的信息和角色信息（需要传递到服务中用到的信息）
+                final Map<String, Object> additionalInformation = new HashMap<>();
+                // Map假装用户实体
+                Map<String, String> userinfo = new HashMap<>();
+                userinfo.put("id", "1");
+                userinfo.put("username", "lqt");
+                userinfo.put("qq", "773984771");
+                userinfo.put("userFlag", "1");
+                additionalInformation.put("userinfo", JSON.toJSONString(userinfo));
+                ((DefaultOAuth2AccessToken) accessToken).setAdditionalInformation(additionalInformation);
+                OAuth2AccessToken enhancedToken = super.enhance(accessToken, authentication);
+                return enhancedToken;
+            }
         };
+        // 测试用,资源服务使用相同的字符达到一个对称加密的效果,生产时候使用RSA非对称加密方式
+        accessTokenConverter.setSigningKey("SigningKey");
+        return accessTokenConverter;
     }
 
-
-    /**
-     * 使用非对称加密算法对token签名
-     */
     @Bean
-    public JwtAccessTokenConverter jwtAccessTokenConverter() {
-        JwtAccessTokenConverter converter = new JwtAccessTokenConverter();
-        converter.setKeyPair(keyPair());
-        return converter;
+    public TokenStore tokenStore() {
+        RedisTokenStore tokenStore = new RedisTokenStore(redisConnectionFactory);
+        return tokenStore;
     }
 
-    /**
-     * 从classpath下的密钥库中获取密钥对(公钥+私钥)
-     */
-    @Bean
-    public KeyPair keyPair() {
-        KeyStoreKeyFactory factory = new KeyStoreKeyFactory(
-                new ClassPathResource("lqt.jks"), "123456".toCharArray());
-        return factory.getKeyPair(
-                "lqt", "123456".toCharArray());
-    }
-
-    /**
-     * JWT内容增强
-     */
-    @Bean
-    public TokenEnhancer tokenEnhancer() {
-        return (accessToken, authentication) -> {
-            Map<String, Object> map = new HashMap<>(2);
-            User user = (User) authentication.getUserAuthentication().getPrincipal();
-            map.put(AuthConstants.JWT_USER_ID_KEY, user.getId());
-            map.put(AuthConstants.JWT_CLIENT_ID_KEY, user.getClientId());
-            ((DefaultOAuth2AccessToken) accessToken).setAdditionalInformation(map);
-            return accessToken;
-        };
-    }
 
 }

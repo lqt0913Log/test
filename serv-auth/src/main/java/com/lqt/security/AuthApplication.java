@@ -14,7 +14,7 @@ import java.util.Map;
 public class AuthApplication {
     public static void main(String[] args) {
         SpringApplication.run( AuthApplication.class, args );
-        Map<String,Object> map = new HashMap<>();
-        map.put("1","lqt");
+//        Map<String,Object> map = new HashMap<>();
+//        map.put("1","lqt");
     }
 }

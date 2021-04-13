@@ -1,2 +1,23 @@
 server:
-  port: 9533
+  port: 8080
+eureka:
+  instance:
+    preferIpAddress: true
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:9800/eureka  ## 注册到 eureka
+spring:
+  application:
+    name: auth
+  redis:
+    host: 127.0.0.1
+    password: null
+    port: 6379
+    jedis:
+      pool:
+        max-idle: 100
+        max-active: 1000
+        max-wait: -1
+logging:
+  level:
+    per.lx: DEBUG
