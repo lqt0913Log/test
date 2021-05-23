@@ -4,7 +4,6 @@ import com.lqt.user.entity.UserDTO;
 import com.lqt.user.mapper.UserMapper;
 import com.lqt.user.service.UserService;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.autoconfigure.AutoConfigureOrder;
 import org.springframework.stereotype.Service;
 
 import java.util.List;

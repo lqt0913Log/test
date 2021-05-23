@@ -47,6 +47,8 @@ spring:
 mybatis:
   mapper-locations: classpath:mapper/*Mapper.xml
   type-aliases-package: com.lqt.user.entity
+  configuration:
+    cache-enabled: true
 logging:
   level:
     #添加分布式链路追踪日志级别

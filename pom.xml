@@ -15,6 +15,7 @@
         <module>seata</module>
         <module>springdatajpa</module>
         <module>zipkin</module>
+        <module>producer</module>
     </modules>
     <parent>
         <groupId>org.springframework.boot</groupId>
